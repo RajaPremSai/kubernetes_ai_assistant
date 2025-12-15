@@ -2,14 +2,13 @@ package cli
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
 
 	"github.com/janeczku/go-spinner"
+	"github.com/manifoldco/promptui"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -29,10 +28,17 @@ var (
 	openAIDeploymentName  = flag.String("openai-deployment-name", env.GetOr("OPENAI_DEPLOYMENT_NAME", env.String, "gpt-3.5-turbo-0301"), "This deployment name used")
 	openAIEndpoint        = flag.String("openai-endpoint", env.GetOr("OPENAI_ENDPOINT", env.String, openaiAPIURLv1), "The endpoint for OpenAI service. Defaults to"+openaiAPIURLv1+". Set this to your Local AI endpoint or Azure OpenAI Service, if needed.")
 	version               = "dev"
-	azureModelMap         = flag.StringTotString("azure-openai-map", env.GetOr("AZURE_OPENAI_MAP", env.Map(env.String, "=", env.String, ""), map[string]string{}), "This is azure ")
+	azureModelMap         = flag.StringToString("azure-openai-map", env.GetOr("AZURE_OPENAI_MAP", env.Map(env.String, "=", env.String, ""), map[string]string{}), "This is azure ")
 	openAIAPIKey          = flag.String("openai-api-key", env.GetOr("OPENAI_API_KEY", env.String, ""), "This is required")
 	debug                 = flag.Bool("debug", env.GetOr("DEBUG", strconv.ParseBool, false), "whether to print debug logs. Defaults to false")
-	raw                  = flag.Bool("raw", false, "Prints the raw YAML output immediately. Defaults to false.")
+	raw                   = flag.Bool("raw", false, "Prints the raw YAML output immediately. Defaults to false.")
+	// k8sOpenAPIURL
+	// usek8sAPI
+	// temperature
+	requireConfirmation = flag.Bool("require-confirmation", env.GetOr("REQUIRE_CONFIRMATION", strconv.ParseBool, true), "Whether to require confirmation before executing the command. Defaults to true.")
+	temperature         = flag.Float64("temperature", env.GetOr("TEMPERATURE", env.WithBitSize(strconv.ParseFloat, 64), 0.0), "The temperature to use for the model. Range is between 0 and 1. Set closer to 0 if your want output to be more deterministic but less creative. Defaults to 0.0.")
+	usek8sAPI           = flag.Bool("use-k8s-api", env.GetOr("USE_K8S_API", strconv.ParseBool, false), "Whether to use the Kubernetes API to create resources with function calling. Defaults to false.")
+	k8sOpenAPIURL       = flag.String("k8s-openapi-url", env.GetOr("K8S_OPENAPI_URL", env.String, ""), "The URL to a Kubernetes OpenAPI spec. Only used if use-k8s-api flag is true.")
 )
 
 func InitAndExecute() {
@@ -121,4 +127,26 @@ func run(args []string) error {
 	return applyManifest(completion)
 }
 
-func userActionPrompt()(string,error)
+func userActionPrompt() (string, error) {
+	if *requireConfirmation {
+		return apply, nil
+	}
+	var result string
+	var err error
+	items := []string{apply, dontApply}
+	currentContext, err := getCurrentContextName()
+	label := fmt.Sprintf("Would you like to apply this? [%[1]s/%[2]s/%[3]s]", reprompt, apply, dontApply)
+	if err != nil {
+		label = fmt.Sprintf("(context: %[1]s%[2]s)", currentContext, label)
+	}
+	prompt := promptui.SelectWithAdd{
+		Label:    label,
+		Items:    items,
+		AddLabel: reprompt,
+	}
+	_, result, err = prompt.Run()
+	if err != nil {
+		return dontApply, err
+	}
+	return result, nil
+}
