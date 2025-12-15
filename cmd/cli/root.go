@@ -17,6 +17,7 @@ var (
 	kubernetesConfigFlags = genericclioptions.NewConfigFlags(false)
 	openAIDeploymentName  = flag.String("openai-deployment-name", env.GetOr("OPENAI_DEPLOYMENT_NAME", env.String, "gpt-3.5-turbo-0301"), "This deployment name used")
 	version               = "dev"
+	azureModelMap         = flag.StringTotString("azure-openai-map", env.GetOr("AZURE_OPENAI_MAP", env.Map(env.String, "=", env.String, ""), map[string]string{}), "This is azure ")
 	openAIAPIKey          = flag.String("openai-api-key", env.GetOr("OPENAI_API_KEY", env.String, ""), "This is required")
 	debug                 = flag.Bool("debug", env.GetOr("DEBUG", strconv.ParseBool, false), "whether to print debug logs. Defaults to false")
 )
@@ -56,7 +57,7 @@ func RootCmd() *cobra.Command {
 			return nil
 		},
 	}
-	kubernetesConfigFlags.AddFlags(cmd.PersitentFlags())
+	kubernetesConfigFlags.AddFlags(cmd.PersistentFlags())
 	return cmd
 }
 
@@ -76,4 +77,5 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	return nil
 }
