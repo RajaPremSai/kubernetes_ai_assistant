@@ -39,7 +39,9 @@ func newOAIClients() (oaiClients, error) {
 	return clients, nil
 }
 
-func getNonChatModels() []string
+func getNonChatModels() []string {
+	return []string{"code-davinci-002", "text-davinci-003"}
+}
 
 func gptCompletion(ctx context.Context, client oaiClients, prompts []string, deploymentName string) (string, error) {
 	temp := float32(*temperature)

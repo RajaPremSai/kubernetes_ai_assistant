@@ -6,8 +6,10 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"time"
 
-	"github.com/janeczku/go-spinner"
+	// "github.com/janeczku/go-spinner"
+	"github.com/briandowns/spinner"
 	"github.com/manifoldco/promptui"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -97,11 +99,21 @@ func run(args []string) error {
 
 	for action != apply {
 		args = append(args, action)
-		s := spinner.NewSpinner("Processing...")
+		// s := spinner.NewSpinner("Processing...")
+		// if !*debug && !*raw {
+		// 	s.SetCharset([]string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"})
+		// 	s.Start()
+		// }
+		s := spinner.New(
+			[]string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"},
+			100*time.Millisecond,
+		)
+		s.Suffix = " Processing..."
+
 		if !*debug && !*raw {
-			s.SetCharset([]string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"})
 			s.Start()
 		}
+
 		completion, err = gptCompletion(ctx, oaiClients, args, *openAIDeploymentName)
 		if err != nil {
 			return err
@@ -111,7 +123,7 @@ func run(args []string) error {
 			fmt.Println(completion)
 			return nil
 		}
-		text := fmt.Sprintln("Attempting to apply the following manifest:\n%s", completion)
+		text := fmt.Sprintf("Attempting to apply the following manifest:\n%s", completion)
 		fmt.Println(text)
 		action, err := userActionPrompt()
 		if err != nil {
@@ -125,7 +137,7 @@ func run(args []string) error {
 }
 
 func userActionPrompt() (string, error) {
-	if *requireConfirmation {
+	if !*requireConfirmation {
 		return apply, nil
 	}
 	var result string
