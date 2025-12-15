@@ -9,17 +9,30 @@ import (
 	"os/signal"
 	"strconv"
 
+	"github.com/janeczku/go-spinner"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
+	"github.com/walles/env"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+)
+
+const (
+	apply     = "Apply"
+	dontApply = "Don't Apply"
+	reprompt  = "Reprompt"
 )
 
 var (
 	openaiAPIURLv1        = "https://api.openai.com/v1"
 	kubernetesConfigFlags = genericclioptions.NewConfigFlags(false)
 	openAIDeploymentName  = flag.String("openai-deployment-name", env.GetOr("OPENAI_DEPLOYMENT_NAME", env.String, "gpt-3.5-turbo-0301"), "This deployment name used")
+	openAIEndpoint        = flag.String("openai-endpoint", env.GetOr("OPENAI_ENDPOINT", env.String, openaiAPIURLv1), "The endpoint for OpenAI service. Defaults to"+openaiAPIURLv1+". Set this to your Local AI endpoint or Azure OpenAI Service, if needed.")
 	version               = "dev"
 	azureModelMap         = flag.StringTotString("azure-openai-map", env.GetOr("AZURE_OPENAI_MAP", env.Map(env.String, "=", env.String, ""), map[string]string{}), "This is azure ")
 	openAIAPIKey          = flag.String("openai-api-key", env.GetOr("OPENAI_API_KEY", env.String, ""), "This is required")
 	debug                 = flag.Bool("debug", env.GetOr("DEBUG", strconv.ParseBool, false), "whether to print debug logs. Defaults to false")
+	raw                  = flag.Bool("raw", false, "Prints the raw YAML output immediately. Defaults to false.")
 )
 
 func InitAndExecute() {
@@ -77,5 +90,35 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	var action, completion string
+
+	for action != apply {
+		args = append(args, action)
+		s := spinner.NewSpinner("Processing...")
+		if !*debug && !*raw {
+			s.SetCharset([]string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"})
+			s.Start()
+		}
+		completion, err = gptCompletion(ctx, oaiClients, args, *openAIDeploymentName)
+		if err != nil {
+			return err
+		}
+		s.Stop()
+		if *raw {
+			fmt.Println(completion)
+			return nil
+		}
+		text := fmt.Sprintln("Attempting to apply the following manifest:\n%s", completion)
+		fmt.Println(text)
+		action, err := userActionPrompt()
+		if err != nil {
+			return err
+		}
+		if action == dontApply {
+			return nil
+		}
+	}
+	return applyManifest(completion)
 }
+
+func userActionPrompt()(string,error)
