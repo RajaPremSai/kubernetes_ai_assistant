@@ -6,6 +6,14 @@ import (
 	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
+	log "github.com/sirupsen/logrus"
+)
+
+type functionCallType string
+
+const (
+	fnCallAuto functionCallType = "auto"
+	fnCallNone functionCallType = "none"
 )
 
 func (c *oaiClients) openaiGptCompletion(ctx context.Context, prompt *strings.Builder, temp float32) (string, error) {
@@ -26,4 +34,69 @@ func (c *oaiClients) openaiGptCompletion(ctx context.Context, prompt *strings.Bu
 	return resp.Choices[0].Text, nil
 }
 
-func (c *oaiClients) openaiGptChatCompletion(ctx context.Context, prompt *strings.Builder, temp float32) (string, error)
+func (c *oaiClients) openaiGptChatCompletion(ctx context.Context, prompt *strings.Builder, temp float32) (string, error) {
+	var (
+		resp     openai.ChatCompletionResponse
+		req      openai.ChatCompletionRequest
+		funcName *openai.FunctionCall
+		content  string
+		err      error
+	)
+	fnCallType := fnCallAuto
+
+	if !*usek8sAPI {
+		fnCallType = fnCallNone
+	}
+	for {
+		prompt.WriteString(content)
+		log.Debugf("prompt: %s", prompt.String())
+		req = openai.ChatCompletionRequest{
+			Model: *openAIDeploymentName,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: prompt.String(),
+				},
+			},
+			N:           1,
+			Temperature: temp,
+			Functions: []openai.FunctionDefinition{
+				findSchemaNames,
+				getSchema,
+			},
+			FunctionCall: fnCallType,
+		}
+		resp, err = c.openAIClient.CreateChatCompletion(ctx, req)
+		if err != nil {
+			return "", err
+		}
+		funcName = resp.Choices[0].Message.FunctionCall
+
+		if funcName == nil {
+			break
+		}
+		log.Debugf("calling function:%s", funcName.Name)
+
+		content, err = funcCall(funcName)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if len(resp.Choices) != 1 {
+		return "", fmt.Errorf("expected choices to be 1 but recieved : %d", len(resp.Choices))
+	}
+	result := resp.Choices[0].Message.Content
+	log.Debugf("result: %s", result)
+	result = trimTicks(result)
+	return result, nil
+}
+
+func trimTicks(str string) string {
+	trimStr := []string{"```yaml", "```"}
+	for _, t := range trimStr {
+		str = strings.ReplaceAll(str, t, "")
+	}
+	return str
+
+}
