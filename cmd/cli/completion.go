@@ -39,7 +39,9 @@ func newOAIClients() (oaiClients, error) {
 	return clients, nil
 }
 
-func gptCompletion(ctx context.Context, client oaiClients, prompts []string, deploymentName string) {
+func getNonChatModels() []string
+
+func gptCompletion(ctx context.Context, client oaiClients, prompts []string, deploymentName string) (string, error) {
 	temp := float32(*temperature)
 	var prompt strings.Builder
 	if *usek8sAPI {
